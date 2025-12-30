@@ -4,7 +4,6 @@ import '../app/routes.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/calendar/calendar_screen.dart';
 import '../screens/profile/profile_screen.dart';
-import '../screens/camera_analysis/camera_screen.dart';
 
 class NutritionApp extends StatelessWidget {
   const NutritionApp({super.key});
@@ -49,11 +48,10 @@ class _MainNavigationState extends State<MainNavigation> {
     final List<Widget> screens = const [
       HomeScreen(),
       CalendarScreen(),
-      ProfileScreen(),
-      CameraScreen(),
+      ProfileScreen()
     ];
 
-    final List<String> titles = ["Home", "Calendar", "Profile", "Camera"];
+    final List<String> titles = ["Home", "Calendar", "Profile"];
 
     return Scaffold(
       appBar: AppBar(title: Text(titles[_currentIndex])),
@@ -65,7 +63,6 @@ class _MainNavigationState extends State<MainNavigation> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: "Calendar"),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
-          BottomNavigationBarItem(icon: Icon(Icons.camera_alt), label: "Camera"),
         ],
         onTap: (index) {
           setState(() {

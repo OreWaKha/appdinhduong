@@ -35,8 +35,8 @@ class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
 
     setState(() => _loading = true);
 
-    // API trả calories theo grams
-    final totalCalories = await _apiService.getCalories(foodName, amount) ?? 0;
+    final totalCalories =
+        await _apiService.getCalories(foodName, amount) ?? 0;
 
     final log = FoodLog(
       id: "",
@@ -55,55 +55,126 @@ class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
   }
 
   @override
+  void dispose() {
+    _foodController.dispose();
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Thêm món ăn"),
         centerTitle: true,
       ),
-
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Tên món ăn
-            TextField(
-              controller: _foodController,
-              decoration: const InputDecoration(
-                labelText: "Tên món",
-                prefixIcon: Icon(Icons.fastfood),
-                border: OutlineInputBorder(),
+      body: Stack(
+        children: [
+          // ===== CONTENT =====
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Card(
+              elevation: 8,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
               ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Gram
-            TextField(
-              controller: _amountController,
-              decoration: const InputDecoration(
-                labelText: "Số gram",
-                prefixIcon: Icon(Icons.scale),
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-            ),
-
-            const SizedBox(height: 24),
-
-            // Nút lưu
-            _loading
-                ? const CircularProgressIndicator()
-                : SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _submit,
-                      icon: const Icon(Icons.check),
-                      label: const Text("Lưu món ăn"),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Header
+                    Column(
+                      children: const [
+                        Icon(
+                          Icons.fastfood,
+                          size: 48,
+                          color: Colors.orange,
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          "Nhập món ăn",
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          "Nhập thông tin món ăn bạn đã dùng",
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
                     ),
-                  ),
-          ],
-        ),
+
+                    const SizedBox(height: 28),
+
+                    // Food name
+                    TextField(
+                      controller: _foodController,
+                      decoration: InputDecoration(
+                        labelText: "Tên món ăn",
+                        prefixIcon: const Icon(Icons.restaurant_menu),
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Amount
+                    TextField(
+                      controller: _amountController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: "Khối lượng (gram)",
+                        helperText: "Ví dụ: 100",
+                        prefixIcon: const Icon(Icons.scale),
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    // Save button
+                    SizedBox(
+                      height: 52,
+                      child: FilledButton.icon(
+                        onPressed: _loading ? null : _submit,
+                        icon: const Icon(Icons.check_circle),
+                        label: const Text(
+                          "Lưu món ăn",
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        style: FilledButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ===== LOADING OVERLAY =====
+          if (_loading)
+            Container(
+              color: Colors.black.withOpacity(0.3),
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
       ),
     );
   }
