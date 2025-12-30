@@ -17,6 +17,19 @@ class FirestoreService {
   Future<void> deleteFoodLog(String uid, String logId) async {
     await _db.collection('users').doc(uid).collection('food_logs').doc(logId).delete();
   }
+  // Lấy tất cả food logs
+  Future<List<FoodLog>> getFoodLogs(String uid) async {
+    final snapshot = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('food_logs')
+        .orderBy('date', descending: true)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => FoodLog.fromMap(doc.id, doc.data()))
+        .toList();
+  }
 
   Stream<List<FoodLog>> getLogsByDate(String uid, DateTime date) {
     final start = DateTime(date.year, date.month, date.day);

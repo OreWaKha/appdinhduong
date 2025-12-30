@@ -5,22 +5,31 @@ import '../../services/food_api_service.dart';
 import '../../models/food_log.dart';
 
 class AddFoodLogScreen extends StatefulWidget {
-  const AddFoodLogScreen({super.key});
+  final FoodLog? foodLog; // null = add, có data = edit
+
+  const AddFoodLogScreen({super.key, this.foodLog});
 
   @override
   State<AddFoodLogScreen> createState() => _AddFoodLogScreenState();
 }
 
 class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
-  final _foodController = TextEditingController();
-  final _amountController = TextEditingController();
+  late TextEditingController _foodController;
+  late TextEditingController _amountController;
 
   final FirestoreService _firestoreService = FirestoreService();
   final FoodApiService _apiService = FoodApiService();
 
   final String userId = FirebaseAuth.instance.currentUser!.uid;
-
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _foodController = TextEditingController(text: widget.foodLog?.foodName ?? "");
+    _amountController = TextEditingController(
+        text: widget.foodLog != null ? widget.foodLog!.amountGram.toString() : "");
+  }
 
   void _submit() async {
     final foodName = _foodController.text.trim();
@@ -35,22 +44,25 @@ class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
 
     setState(() => _loading = true);
 
-    final totalCalories =
-        await _apiService.getCalories(foodName, amount) ?? 0;
+    final totalCalories = await _apiService.getCalories(foodName, amount) ?? 0;
 
     final log = FoodLog(
-      id: "",
+      id: widget.foodLog?.id ?? "",
       foodName: foodName,
       amountGram: amount,
       calories: totalCalories,
-      date: DateTime.now(),
-      source: "manual",
+      date: widget.foodLog?.date ?? DateTime.now(),
+      source: widget.foodLog?.source ?? "manual",
+      imageUrl: widget.foodLog?.imageUrl,
     );
 
-    await _firestoreService.addFoodLog(userId, log);
+    if (widget.foodLog == null) {
+      await _firestoreService.addFoodLog(userId, log);
+    } else {
+      await _firestoreService.updateFoodLog(userId, log);
+    }
 
     setState(() => _loading = false);
-
     Navigator.pop(context);
   }
 
@@ -63,118 +75,127 @@ class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isEdit = widget.foodLog != null;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Thêm món ăn"),
+        title: Text(isEdit ? "Chỉnh sửa món ăn" : "Thêm món ăn"),
         centerTitle: true,
       ),
-      body: Stack(
-        children: [
-          // ===== CONTENT =====
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Card(
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Header
-                    Column(
-                      children: const [
-                        Icon(
-                          Icons.fastfood,
-                          size: 48,
-                          color: Colors.orange,
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          "Nhập món ăn",
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage("assets/images/background.png"),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Card(
+                color: Colors.white.withOpacity(0.9),
+                elevation: 8,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Header
+                      Column(
+                        children: const [
+                          Icon(
+                            Icons.fastfood,
+                            size: 48,
+                            color: Colors.orange,
                           ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          "Nhập thông tin món ăn bạn đã dùng",
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 28),
-
-                    // Food name
-                    TextField(
-                      controller: _foodController,
-                      decoration: InputDecoration(
-                        labelText: "Tên món ăn",
-                        prefixIcon: const Icon(Icons.restaurant_menu),
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                          SizedBox(height: 8),
+                          Text(
+                            "Nhập món ăn",
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            "Nhập thông tin món ăn bạn đã dùng",
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ],
                       ),
-                    ),
+                      const SizedBox(height: 28),
 
-                    const SizedBox(height: 16),
-
-                    // Amount
-                    TextField(
-                      controller: _amountController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: "Khối lượng (gram)",
-                        helperText: "Ví dụ: 100",
-                        prefixIcon: const Icon(Icons.scale),
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 28),
-
-                    // Save button
-                    SizedBox(
-                      height: 52,
-                      child: FilledButton.icon(
-                        onPressed: _loading ? null : _submit,
-                        icon: const Icon(Icons.check_circle),
-                        label: const Text(
-                          "Lưu món ăn",
-                          style: TextStyle(fontSize: 16),
-                        ),
-                        style: FilledButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                      // Food name
+                      TextField(
+                        controller: _foodController,
+                        decoration: InputDecoration(
+                          labelText: "Tên món ăn",
+                          prefixIcon: const Icon(Icons.restaurant_menu),
+                          filled: true,
+                          fillColor: Colors.grey.shade100,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+
+                      const SizedBox(height: 16),
+
+                      // Amount
+                      TextField(
+                        controller: _amountController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: "Khối lượng (gram)",
+                          helperText: "Ví dụ: 100",
+                          prefixIcon: const Icon(Icons.scale),
+                          filled: true,
+                          fillColor: Colors.grey.shade100,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 28),
+
+                      // Save button
+                      SizedBox(
+                        height: 52,
+                        child: FilledButton.icon(
+                          onPressed: _loading ? null : _submit,
+                          icon: const Icon(Icons.check_circle),
+                          label: Text(
+                            isEdit ? "Cập nhật món ăn" : "Lưu món ăn",
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          style: FilledButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
 
-          // ===== LOADING OVERLAY =====
-          if (_loading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(
-                child: CircularProgressIndicator(),
+            // Loading overlay
+            if (_loading)
+              Container(
+                color: Colors.black.withOpacity(0.3),
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
