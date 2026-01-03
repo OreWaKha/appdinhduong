@@ -54,9 +54,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   String _statusText(double total, double bmr) {
-    if (total < bmr - 100) return "CHƯA ĐẠT (thiếu)";
+    if (total < bmr - 100) return "CHƯA ĐẠT";
     if ((total - bmr).abs() <= 100) return "ĐẠT MỨC KHUYÊN NGHỊ";
-    return "VƯỢT MỨC (dư)";
+    return "VƯỢT MỨC";
   }
 
   void _toggleCalendar() {
@@ -81,10 +81,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final monthEndEx = _monthEndExclusive(_focusedDay);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Lịch dinh dưỡng"),
-        centerTitle: true,
-      ),
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(

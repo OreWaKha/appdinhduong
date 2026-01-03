@@ -1,3 +1,4 @@
+import 'package:appdinhduong/screens/home/weekly_detail_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -105,7 +106,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // ===== TỔNG CALO TUẦN =====
               SliverToBoxAdapter(
-                child: WeekSummaryWidget(userId: userId),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Stack(
+                    alignment: Alignment.topRight,
+                    children: [
+                      WeekSummaryWidget(userId: userId),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: IconButton(
+                          icon: const Icon(Icons.analytics, color: Colors.blue, size: 28),
+                          tooltip: "Xem chi tiết tuần",
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => WeeklyDetailScreen(
+                                  userId: userId,
+                                  referenceDate: selectedDate,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
 
               // ===== TỔNG CALO NGÀY =====

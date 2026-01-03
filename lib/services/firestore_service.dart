@@ -17,6 +17,7 @@ class FirestoreService {
   Future<void> deleteFoodLog(String uid, String logId) async {
     await _db.collection('users').doc(uid).collection('food_logs').doc(logId).delete();
   }
+
   // Lấy tất cả food logs
   Future<List<FoodLog>> getFoodLogs(String uid) async {
     final snapshot = await _db
@@ -31,6 +32,7 @@ class FirestoreService {
         .toList();
   }
 
+  // Stream logs theo ngày
   Stream<List<FoodLog>> getLogsByDate(String uid, DateTime date) {
     final start = DateTime(date.year, date.month, date.day);
     final end = start.add(const Duration(days: 1));
@@ -45,6 +47,7 @@ class FirestoreService {
         .map((snapshot) => snapshot.docs.map((doc) => FoodLog.fromMap(doc.id, doc.data())).toList());
   }
 
+  // Stream logs theo khoảng ngày
   Stream<List<FoodLog>> getLogsInRange(String uid, DateTime start, DateTime end) {
     return _db
         .collection('users')
@@ -54,6 +57,22 @@ class FirestoreService {
         .where('date', isLessThan: end)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => FoodLog.fromMap(doc.id, doc.data())).toList());
+  }
+
+  Future<List<FoodLog>> getLogsByDateOnce(String uid, DateTime date) async {
+    final start = DateTime(date.year, date.month, date.day);
+    final end = start.add(const Duration(days: 1));
+
+    final snapshot = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('food_logs')
+        .where('date', isGreaterThanOrEqualTo: start)
+        .where('date', isLessThan: end)
+        .orderBy('date')
+        .get();
+
+    return snapshot.docs.map((doc) => FoodLog.fromMap(doc.id, doc.data())).toList();
   }
 
   // ---------- USER PROFILE ----------
