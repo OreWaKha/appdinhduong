@@ -1,13 +1,20 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:translator/translator.dart'; // Google Translate
 import '../../services/firestore_service.dart';
 import '../../services/food_api_service.dart';
 import '../../models/food_log.dart';
+import '../../utils/vi_to_en.dart';
 
 class AddFoodLogScreen extends StatefulWidget {
   final FoodLog? foodLog; // null = add, có data = edit
+  final DateTime? selectedDate; 
 
-  const AddFoodLogScreen({super.key, this.foodLog});
+  const AddFoodLogScreen({
+    super.key,
+    this.foodLog,
+    this.selectedDate,
+  });
 
   @override
   State<AddFoodLogScreen> createState() => _AddFoodLogScreenState();
@@ -19,6 +26,7 @@ class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
 
   final FirestoreService _firestoreService = FirestoreService();
   final FoodApiService _apiService = FoodApiService();
+  final GoogleTranslator _translator = GoogleTranslator();
 
   final String userId = FirebaseAuth.instance.currentUser!.uid;
   bool _loading = false;
@@ -26,16 +34,20 @@ class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
   @override
   void initState() {
     super.initState();
-    _foodController = TextEditingController(text: widget.foodLog?.foodName ?? "");
+    _foodController =
+        TextEditingController(text: widget.foodLog?.foodName ?? "");
     _amountController = TextEditingController(
-        text: widget.foodLog != null ? widget.foodLog!.amountGram.toString() : "");
+      text: widget.foodLog != null
+          ? widget.foodLog!.amountGram.toString()
+          : "",
+    );
   }
 
-  void _submit() async {
-    final foodName = _foodController.text.trim();
+  Future<void> _submit() async {
+    final foodNameVi = _foodController.text.trim();
     final amount = double.tryParse(_amountController.text.trim());
 
-    if (foodName.isEmpty || amount == null) {
+    if (foodNameVi.isEmpty || amount == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Vui lòng nhập đầy đủ thông tin")),
       );
@@ -44,14 +56,29 @@ class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
 
     setState(() => _loading = true);
 
-    final totalCalories = await _apiService.getCalories(foodName, amount) ?? 0;
+    // ===== Bước 1: Chuyển tên món tiếng Việt sang tiếng Anh =====
+    String foodNameEn = translateToEnglish(foodNameVi);
 
+    if (foodNameEn.isEmpty) {
+      try {
+        final translation = await _translator.translate(foodNameVi, from: 'vi', to: 'en');
+        foodNameEn = translation.text;
+      } catch (e) {
+        // Nếu dịch thất bại, fallback: dùng tên gốc
+        foodNameEn = foodNameVi;
+      }
+    }
+
+    // ===== Bước 2: Call API bằng tiếng Anh =====
+    final totalCalories = await _apiService.getCalories(foodNameEn, amount) ?? 0;
+
+    // ===== Bước 3: Tạo FoodLog, vẫn hiển thị tên tiếng Việt =====
     final log = FoodLog(
       id: widget.foodLog?.id ?? "",
-      foodName: foodName,
+      foodName: foodNameVi, // hiển thị tiếng Việt
       amountGram: amount,
       calories: totalCalories,
-      date: widget.foodLog?.date ?? DateTime.now(),
+      date: widget.foodLog?.date ?? widget.selectedDate ?? DateTime.now(),
       source: widget.foodLog?.source ?? "manual",
       imageUrl: widget.foodLog?.imageUrl,
     );
@@ -104,14 +131,9 @@ class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Header
                       Column(
                         children: const [
-                          Icon(
-                            Icons.fastfood,
-                            size: 48,
-                            color: Colors.orange,
-                          ),
+                          Icon(Icons.fastfood, size: 48, color: Colors.orange),
                           SizedBox(height: 8),
                           Text(
                             "Nhập món ăn",
@@ -129,7 +151,6 @@ class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
                       ),
                       const SizedBox(height: 28),
 
-                      // Food name
                       TextField(
                         controller: _foodController,
                         decoration: InputDecoration(
@@ -145,7 +166,6 @@ class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
 
                       const SizedBox(height: 16),
 
-                      // Amount
                       TextField(
                         controller: _amountController,
                         keyboardType: TextInputType.number,
@@ -163,7 +183,6 @@ class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
 
                       const SizedBox(height: 28),
 
-                      // Save button
                       SizedBox(
                         height: 52,
                         child: FilledButton.icon(
@@ -186,13 +205,10 @@ class _AddFoodLogScreenState extends State<AddFoodLogScreen> {
               ),
             ),
 
-            // Loading overlay
             if (_loading)
               Container(
                 color: Colors.black.withOpacity(0.3),
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                child: const Center(child: CircularProgressIndicator()),
               ),
           ],
         ),

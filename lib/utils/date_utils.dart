@@ -6,4 +6,5 @@ class DateHelper {
   static DateTime weekEnd(DateTime d) {
     return weekStart(d).add(const Duration(days: 7));
   }
+  
 }

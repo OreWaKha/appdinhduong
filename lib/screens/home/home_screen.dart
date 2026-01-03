@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import '../../services/firestore_service.dart';
 import '../../models/food_log.dart';
+import '../../models/user_profile.dart';
 import '../food_log/add_food_log_screen.dart';
 import 'week_summary_widget.dart';
 
@@ -18,10 +20,36 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String get userId => FirebaseAuth.instance.currentUser!.uid;
 
+  // ===== XÓA MÓN =====
+  Future<void> _confirmDelete(FoodLog log) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Xóa món ăn"),
+        content: Text("Bạn chắc chắn muốn xóa '${log.foodName}'?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Hủy"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Xóa"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _firestoreService.deleteFoodLog(userId, log.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
@@ -30,157 +58,256 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              // ===== Tổng calo tuần =====
-              WeekSummaryWidget(userId: userId),
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              // ===== SMART HINT BMR =====
+              SliverToBoxAdapter(
+                child: FutureBuilder<UserProfile?>(
+                  future: _firestoreService.getUserProfile(userId),
+                  builder: (context, snap) {
+                    if (!snap.hasData || snap.data == null) {
+                      return const SizedBox.shrink();
+                    }
 
-              // ===== Tổng calo ngày được chọn =====
-              StreamBuilder<List<FoodLog>>(
-                stream: _firestoreService.getLogsByDate(userId, selectedDate),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const SizedBox();
-                  final logs = snapshot.data!;
-                  final totalCaloriesDay = logs.fold<double>(0, (sum, log) => sum + log.calories);
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Container(
+                    final profile = snap.data!;
+                    final dailyTarget =
+                        (profile.weeklyGoal / 7).round();
+
+                    return Padding(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.85),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.shade400,
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50.withOpacity(0.95),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.lightbulb_outline,
+                                color: Colors.blue),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                "Gợi ý hôm nay: ~$dailyTarget kcal\n"
+                                "BMR: ${profile.bmr.toStringAsFixed(0)} kcal/ngày",
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            "Tổng calo ngày",
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    );
+                  },
+                ),
+              ),
+
+              // ===== TỔNG CALO TUẦN =====
+              SliverToBoxAdapter(
+                child: WeekSummaryWidget(userId: userId),
+              ),
+
+              // ===== TỔNG CALO NGÀY =====
+              SliverToBoxAdapter(
+                child: StreamBuilder<List<FoodLog>>(
+                  stream: _firestoreService.getLogsByDate(
+                      userId, selectedDate),
+                  builder: (context, snap) {
+                    if (!snap.hasData) return const SizedBox();
+
+                    final total = snap.data!
+                        .fold<double>(0, (s, e) => s + e.calories);
+
+                    return _infoCard(
+                      title: "Tổng calo ngày",
+                      value: "${total.toStringAsFixed(0)} kcal",
+                      valueColor: Colors.orange,
+                    );
+                  },
+                ),
+              ),
+
+              // ===== CHỌN NGÀY + NÚT ADD =====
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          backgroundColor:
+                              Colors.white.withOpacity(0.9),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
                           ),
-                          Text(
-                            "${totalCaloriesDay.toStringAsFixed(0)} cal",
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                        ],
+                        ),
+                        icon: const Icon(Icons.calendar_today, size: 18),
+                        label: Text(
+                          "${selectedDate.day}/${selectedDate.month}/${selectedDate.year}",
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: () async {
+                          final date = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDate,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100),
+                          );
+                          if (date != null) {
+                            setState(() => selectedDate = date);
+                          }
+                        },
                       ),
+                      const SizedBox(width: 12),
+
+                      /// 🔥 SỬA DUY NHẤT Ở ĐÂY
+                      SizedBox(
+                        height: 44,
+                        width: 44,
+                        child: FloatingActionButton(
+                          heroTag: "add_food",
+                          backgroundColor: Colors.orange,
+                          elevation: 4,
+                          child: const Icon(Icons.add, size: 22),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AddFoodLogScreen(
+                                  selectedDate: selectedDate,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+              // ===== DANH SÁCH MÓN =====
+              StreamBuilder<List<FoodLog>>(
+                stream: _firestoreService.getLogsByDate(
+                    userId, selectedDate),
+                builder: (context, snap) {
+                  if (!snap.hasData) {
+                    return const SliverToBoxAdapter(
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  final logs = snap.data!;
+                  if (logs.isEmpty) {
+                    return const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: Text("Chưa có dữ liệu")),
+                      ),
+                    );
+                  }
+
+                  return SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) {
+                        final log = logs[i];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 6),
+                          child: Card(
+                            color: Colors.white.withOpacity(0.9),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: ListTile(
+                              title: Text(
+                                log.foodName,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text(
+                                "${log.amountGram} g • ${log.calories.toStringAsFixed(0)} kcal",
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit,
+                                        color: Colors.orange),
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              AddFoodLogScreen(foodLog: log),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete,
+                                        color: Colors.red),
+                                    onPressed: () =>
+                                        _confirmDelete(log),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      childCount: logs.length,
                     ),
                   );
                 },
               ),
 
-              // ===== Chọn ngày =====
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.calendar_today, size: 18, color: Colors.grey),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.85),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      onPressed: () async {
-                        final date = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2100),
-                        );
-                        if (date != null) {
-                          setState(() {
-                            selectedDate = date;
-                          });
-                        }
-                      },
-                      child: Text(
-                        "${selectedDate.day}/${selectedDate.month}/${selectedDate.year}",
-                        style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // ===== Danh sách món ăn ngày đã chọn =====
-              Expanded(
-                child: StreamBuilder<List<FoodLog>>(
-                  stream: _firestoreService.getLogsByDate(userId, selectedDate),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) return const Center(child: Text("Lỗi tải dữ liệu"));
-                    if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                    final logs = snapshot.data!;
-                    if (logs.isEmpty) return const Center(child: Text("Chưa có dữ liệu hôm nay"));
-
-                    return ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      itemCount: logs.length,
-                      itemBuilder: (context, index) {
-                        final log = logs[index];
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 6),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          elevation: 4,
-                          color: Colors.white.withOpacity(0.9),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            title: Text(
-                              log.foodName,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            subtitle: Text(
-                              "${log.amountGram} g - ${log.calories.toStringAsFixed(2)} cal",
-                              style: const TextStyle(fontSize: 14, color: Colors.grey),
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.orange),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => AddFoodLogScreen(foodLog: log),
-                                  ),
-                                ).then((_) => setState(() {}));
-                              },
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 80)),
             ],
           ),
         ),
       ),
+    );
+  }
 
-      // ===== Nút thêm món =====
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.orange,
-        child: const Icon(Icons.add),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const AddFoodLogScreen(),
+  // ===== CARD INFO =====
+  Widget _infoCard({
+    required String title,
+    required String value,
+    required Color valueColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(title,
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: valueColor,
+              ),
             ),
-          ).then((_) => setState(() {}));
-        },
+          ],
+        ),
       ),
     );
   }
